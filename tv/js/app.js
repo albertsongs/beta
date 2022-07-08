@@ -19,6 +19,7 @@ class App {
             this.logger.debug("command is not defined");
             return;
         }
+        this.logger.debug(JSON.stringify(command.payload));
         this.multiPlayer.handleCommand(command);
     }
 
@@ -36,7 +37,11 @@ class App {
                 status: "JOIN"
             };
             stompClient.send('/app/message', {}, JSON.stringify(message));
-        }, (err) => this.logger.debug(err));
+            this.multiPlayer.buildConnectQR(this.receiverId);
+        }, (err) => {
+            this.logger.debug(err);
+            setTimeout(() => this.connectToWebSocket(), 30000);
+        });
     }
 
     registerReceiver() {

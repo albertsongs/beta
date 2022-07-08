@@ -2,13 +2,15 @@
  * @albertsongs (https://github.com/albertsongs)
  */
 class MultiPlayer {
-    constructor(videoPlayer, iframePlayer, initVolume, changePlayerVolumeHandler) {
+    constructor(videoPlayer, iframePlayer, qrCode, initVolume, changePlayerVolumeHandler) {
         this.videoPlayer = videoPlayer;
         this.iframePlayer = iframePlayer;
-        this.volume = initVolume;
+        this.qrCode = qrCode;
+        this.videoPlayer.volume = this.volume = initVolume;
         this.changePlayerVolumeHandler = changePlayerVolumeHandler;
         this.videoIndex = 0;
         this.videoPlayer.onended = () => this.nextTrack();
+        this.showSubtitles();
     }
     handleCommand(command) {
         switch (command.type) {
@@ -19,11 +21,8 @@ class MultiPlayer {
                 this.loadRawVideo(command.payload);
                 this.videoIndex = this.getVideoIndex(command.payload);
                 break;
-            case 'PLAY':
-                this.videoPlayer.play();
-                break;
-            case 'PAUSE':
-                this.videoPlayer.pause();
+            case 'PLAY_PAUSE':
+                this.playPause();
                 break;
             case 'NEXT':
                 this.nextTrack();
@@ -67,6 +66,7 @@ class MultiPlayer {
             "&list=%playlistId%&listType=playlist&loop=1&color=white";
         this.videoPlayer.style.setProperty('display', 'none');
         this.iframePlayer.style.setProperty('display', 'block');
+        this.videoPlayer.pause();
         this.iframePlayer.src = youtubeLinkPattern
             .replace('%videoId%', videoInfo.youtube.videoId)
             .replace('%playlistId%', videoInfo.youtube.playlistId);
@@ -77,17 +77,25 @@ class MultiPlayer {
                 "<track id='subtitles' label='Russian' kind='subtitles' srclang='ru' " +
                 "src='%source%' default>"
             this.videoPlayer.innerHTML = trackPattern.replace('%source%', videoInfo.subtitlesUrl);
+            this.showSubtitles();
         }
         this.videoPlayer.src = videoInfo.url;
         this.iframePlayer.style.setProperty('display', 'none');
         this.videoPlayer.style.setProperty('display', 'block');
+    }
+    playPause() {
+        this.videoPlayer.paused
+            ? this.videoPlayer.play()
+            : this.videoPlayer.pause();
     }
     nextTrack() {
         this.videoIndex = (this.videoIndex + 1) % this.videosCount;
         this.loadRawVideo(this.videos[this.videoIndex]);
     }
     previousTrack() {
-        this.videoIndex = (this.videoIndex - 1) % this.videosCount;
+        this.videoIndex = this.videoIndex === 0
+            ? this.videosCount - 1
+            : (this.videoIndex - 1) % this.videosCount;
         this.loadRawVideo(this.videos[this.videoIndex]);
     }
     getVideoIndex(videoInfo) {
@@ -95,5 +103,20 @@ class MultiPlayer {
             return (this.videoIndex + 1) % this.videosCount;
         }
         return this.videoIndexes[videoInfo.id];
+    }
+    showSubtitles(){
+        this.videoPlayer.textTracks.getTrackById("subtitles").mode = "showing";
+    }
+    buildConnectQR(receiverId) {
+        let connectUrl = "https://albertsongs.github.io/rc?receiverId=" + receiverId;
+        this.qrCode.innerHTML = "";
+        new QRCode(this.qrCode, connectUrl);
+    }
+    toggleQrCodeVisibility() {
+        let cssPropertyOpacity = 'opacity';
+        let qrElemOpacity = this.qrCode.style.getPropertyValue(cssPropertyOpacity);
+        qrElemOpacity = parseFloat(qrElemOpacity) < 1 ? '1' : '0';
+        this.qrCode.style.setProperty(cssPropertyOpacity, qrElemOpacity);
+        this.qrCode.style.setProperty('animation', 'none');
     }
 }

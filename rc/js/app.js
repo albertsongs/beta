@@ -6,10 +6,42 @@ class App {
         this.receiverId = null;
         this.apiUrl = apiUrl;
         this.ui = ui;
+        this.initControlPanelHandlers();
+    }
+
+    initControlPanelHandlers(){
+        this.ui.controlPanel.playPauseElem.onclick = () => {
+            this.sendCommandToReceiverById('play-pause');
+        };
+        this.ui.controlPanel.previousElem.onclick = () => {
+            this.sendCommandToReceiverById('previous');
+        };
+        this.ui.controlPanel.nextElem.onclick = () => {
+            this.sendCommandToReceiverById('next');
+        };
+        this.ui.controlPanel.volumeDownElem.onclick = () => {
+            this.sendCommandToReceiverById('volume/down');
+        };
+        this.ui.controlPanel.volumeUpElem.onclick = () => {
+            this.sendCommandToReceiverById('volume/up');
+        };
+    }
+
+    readReceiverIdFromQueryParam() {
+        return window.location.search.split('=')[1] ?? null;
     }
 
     initReceiverId() {
         this.ui.step1();
+        this.receiverId = this.readReceiverIdFromQueryParam();
+        if (this.receiverId !== null) {
+            this.checkReceiverId();
+            return;
+        }
+        this.findUpToDateReceiver();
+    }
+
+    findUpToDateReceiver() {
         const xHttp = new XMLHttpRequest();
         const receiverControllerPath = "/api/v1/receivers";
         const url = this.apiUrl + receiverControllerPath;
@@ -21,7 +53,7 @@ class App {
                 that.receiverId = receivers[0]?.id ?? null;
                 if (that.receiverId === null) {
                     setTimeout(function () {
-                        that.initReceiverId();
+                        that.findUpToDateReceiver();
                     }, 5000);
                     return;
                 }
@@ -32,25 +64,60 @@ class App {
         xHttp.send();
     }
 
+    checkReceiverId() {
+        const xHttp = new XMLHttpRequest();
+        const url = this.apiUrl + "/api/v1.1/receivers/" + this.receiverId;
+        let that = this;
+        xHttp.onreadystatechange = function () {
+            if (this.readyState !== 4) {
+                return;
+            }
+            if (this.status === 200) {
+                that.loadVideos();
+            } else {
+                let errMsg = "Приёмник с данным идентификатором не найден (id: %id%).\n\n"
+                    .replace('%id%', that.receiverId)
+                + "Попробуем найти самый свежий приёмник поблизости?"
+                alert(errMsg);
+                window.location.search = "";
+            }
+        };
+        xHttp.open("GET", url, true);
+        xHttp.send();
+    }
+
     sendVideoIdToReceiver(videoId) {
-        if (this.receiverId === null || videoId === null) {
+        if (videoId === null) {
             return;
         }
-        const xHttp = new XMLHttpRequest();
-        const receiverControllerPath = '/api/v1.1/receivers/{receiverId}/playVideo'
-            .replace('{receiverId}', this.receiverId);
-        const url = this.apiUrl + receiverControllerPath;
         let videoInfo = {
             id: videoId
         };
+        this.sendCommandToReceiverById('playVideo', videoInfo);
+    }
+
+    sendCommandToReceiverById(command, payload) {
+        if (this.receiverId === null || command === null) {
+            return;
+        }
+        const xHttp = new XMLHttpRequest();
+        const receiverControllerPath = '/api/v1.1/receivers/{receiverId}/:command'
+            .replace('{receiverId}', this.receiverId)
+            .replace(':command', command);
+        const url = this.apiUrl + receiverControllerPath;
         xHttp.onreadystatechange = function () {
-            if (this.readyState === 4 && this.status === 202) {
-                console.log(xHttp.response);
+            if (this.readyState !== 4) {
+                return;
             }
-        };
+            if (this.status === 202) {
+                console.log(xHttp.response);
+                return;
+            }
+            window.location.reload();
+        }
         xHttp.open('POST', url, true);
         xHttp.setRequestHeader('Content-type', 'application/json');
-        xHttp.send(JSON.stringify(videoInfo));
+        xHttp.send(payload ? JSON.stringify(payload) : null);
     }
 
     loadVideos() {
@@ -109,11 +176,11 @@ class UI {
     }
 
     renderControlPanel() {
-        this.controlPanel.playPauseElem.innerText = "play/pause";
-        this.controlPanel.previousElem.innerText = "previous";
-        this.controlPanel.nextElem.innerText = "next";
-        this.controlPanel.volumeDownElem.innerText = "volume down";
-        this.controlPanel.volumeUpElem.innerText = "volume up";
+        this.controlPanel.playPauseElem.innerText = "⏯";
+        this.controlPanel.previousElem.innerText = "⏮";
+        this.controlPanel.nextElem.innerText = "⏭";
+        this.controlPanel.volumeDownElem.innerText = "🔉";
+        this.controlPanel.volumeUpElem.innerText = "🔊";
         this.controlPanel.controlPanelElem.appendChild(this.controlPanel.volumeDownElem);
         this.controlPanel.controlPanelElem.appendChild(this.controlPanel.previousElem);
         this.controlPanel.controlPanelElem.appendChild(this.controlPanel.playPauseElem);
